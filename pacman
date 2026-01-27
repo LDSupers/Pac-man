@@ -1,0 +1,151 @@
+import arcade
+from collections import deque
+
+TILE = 32
+WIDTH = 640
+HEIGHT = 480
+
+PLAYER_SPEED = 140
+ENEMY_MOVE_INTERVAL = 0.6
+
+LEVEL = [
+    "####################",
+    "#........G.........#",
+    "#.####.#####.####..#",
+    "#P.................#",
+    "####################",
+]
+
+
+class Wall(arcade.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.texture = arcade.make_soft_square_texture(
+            TILE, arcade.color.BLUE, 255
+        )
+        self.center_x = x
+        self.center_y = y
+
+
+class Coin(arcade.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.texture = arcade.make_circle_texture(
+            TILE // 4, arcade.color.YELLOW
+        )
+        self.center_x = x
+        self.center_y = y
+
+
+class Player(arcade.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.texture = arcade.make_circle_texture(
+            TILE // 2, arcade.color.YELLOW
+        )
+        self.center_x = x
+        self.center_y = y
+        self.change_x = 0
+        self.change_y = 0
+        self.lives = 3
+
+
+class Ghost(arcade.Sprite):
+    def __init__(self, x, y):
+        super().__init__()
+        self.texture = arcade.make_circle_texture(
+            TILE // 2, arcade.color.RED
+        )
+        self.center_x = x
+        self.center_y = y
+        self.timer = 0
+
+
+class PacmanGame(arcade.Window):
+    def __init__(self):
+        super().__init__(WIDTH, HEIGHT, "Pacman")
+
+        self.wall_list = arcade.SpriteList(use_spatial_hash=True)
+        self.coin_list = arcade.SpriteList(use_spatial_hash=True)
+        self.player_list = arcade.SpriteList()
+        self.ghost_list = arcade.SpriteList()
+
+        self.player = None
+        self.start_pos = (0, 0)
+
+        self.rows = len(LEVEL)
+        self.cols = len(LEVEL[0])
+        self.grid = []
+
+        self.lives_text = arcade.Text(
+            "Lives: 3", 10, HEIGHT - 30, arcade.color.WHITE, 16
+        )
+
+        self.setup()
+
+    def setup(self):
+        for r, row in enumerate(LEVEL):
+            grid_row = []
+            for c, cell in enumerate(row):
+                x = c * TILE + TILE // 2
+                y = (self.rows - r - 1) * TILE + TILE // 2
+
+                walkable = cell != "#"
+                grid_row.append(walkable)
+
+                if cell == "#":
+                    self.wall_list.append(Wall(x, y))
+                elif cell == ".":
+                    self.coin_list.append(Coin(x, y))
+                elif cell == "P":
+                    self.player = Player(x, y)
+                    self.start_pos = (x, y)
+                    self.player_list.append(self.player)
+                elif cell == "G":
+                    self.ghost_list.append(Ghost(x, y))
+
+            self.grid.append(grid_row)
+
+    def on_draw(self):
+        self.clear()
+        self.wall_list.draw()
+        self.coin_list.draw()
+        self.ghost_list.draw()
+        self.player_list.draw()
+        self.lives_text.draw()
+
+    # ✅ KEYBOARD WORKS HERE — NO VIEW MAGIC
+    def on_key_press(self, key, modifiers):
+        if key == arcade.key.UP:
+            self.player.change_y = PLAYER_SPEED
+        elif key == arcade.key.DOWN:
+            self.player.change_y = -PLAYER_SPEED
+        elif key == arcade.key.LEFT:
+            self.player.change_x = -PLAYER_SPEED
+        elif key == arcade.key.RIGHT:
+            self.player.change_x = PLAYER_SPEED
+
+    def on_key_release(self, key, modifiers):
+        if key in (arcade.key.UP, arcade.key.DOWN):
+            self.player.change_y = 0
+        if key in (arcade.key.LEFT, arcade.key.RIGHT):
+            self.player.change_x = 0
+
+    def on_update(self, dt):
+        self.player.center_x += self.player.change_x * dt
+        if arcade.check_for_collision_with_list(self.player, self.wall_list):
+            self.player.center_x -= self.player.change_x * dt
+
+        self.player.center_y += self.player.change_y * dt
+        if arcade.check_for_collision_with_list(self.player, self.wall_list):
+            self.player.center_y -= self.player.change_y * dt
+
+        self.lives_text.text = f"Lives: {self.player.lives}"
+
+
+def main():
+    PacmanGame()
+    arcade.run()
+
+
+main()
