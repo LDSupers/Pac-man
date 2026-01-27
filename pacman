@@ -8,9 +8,17 @@ PLAYER_SPEED = 200
 
 LEVEL_MAP = [
     "WWWWWWWWWWWWWWWWWWWWWWW",
-    "W.....................W",
-    "W...P.............G...W",
-    "W.........G...........W",
+    "W.........W.........W.W",
+    "W.WWW.WWW.W.WWW.WWW.W.W",
+    "W.W...W...W.W...W...W.W",
+    "W.W.W.W.WWW.W.W.W.W.W.W",
+    "W...W.....P.....W...W.W",
+    "WWW.W.WWW.WWW.W.W.WWW.W",
+    "W.....W...G...W.....W.W",
+    "W.WWW.W.WWW.W.W.WWW.W.W",
+    "W.W...W.....W.W...W...W",
+    "W.W.W.WWWWWWW.W.W.W.W.W",
+    "W...G.....W.....G.....W",
     "WWWWWWWWWWWWWWWWWWWWWWW"
 ]
 
@@ -157,4 +165,5 @@ def main():
 
 if __name__ == "__main__":
     main()
+
 
