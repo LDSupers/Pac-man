@@ -1,110 +1,85 @@
 import arcade
-from collections import deque
 
-TILE = 32
-WIDTH = 640
-HEIGHT = 480
+WINDOW_WIDTH = 800
+WINDOW_HEIGHT = 600
+WINDOW_TITLE = "Pacman Game"
+TILE_SIZE = 32
+PLAYER_SPEED = 200
 
-PLAYER_SPEED = 140
-ENEMY_MOVE_INTERVAL = 0.6
-
-LEVEL = [
-    "####################",
-    "#........G.........#",
-    "#.####.#####.####..#",
-    "#P.................#",
-    "####################",
+LEVEL_MAP = [
+    "WWWWWWWWWWWWWWWWWWWWWWW",
+    "W.....................W",
+    "W...P.............G...W",
+    "W.........G...........W",
+    "WWWWWWWWWWWWWWWWWWWWWWW"
 ]
 
-
-class Wall(arcade.Sprite):
-    def __init__(self, x, y):
+class Character(arcade.Sprite):
+    def __init__(self, x, y, color, radius=None):
         super().__init__()
-        self.texture = arcade.make_soft_square_texture(
-            TILE, arcade.color.BLUE, 255
-        )
-        self.center_x = x
-        self.center_y = y
-
-
-class Coin(arcade.Sprite):
-    def __init__(self, x, y):
-        super().__init__()
-        self.texture = arcade.make_circle_texture(
-            TILE // 4, arcade.color.YELLOW
-        )
-        self.center_x = x
-        self.center_y = y
-
-
-class Player(arcade.Sprite):
-    def __init__(self, x, y):
-        super().__init__()
-        self.texture = arcade.make_circle_texture(
-            TILE // 2, arcade.color.YELLOW
-        )
+        if radius is None:
+            radius = TILE_SIZE // 2 - 2
+        texture = arcade.make_circle_texture(radius * 2, color)
+        self.texture = texture
+        self.width = texture.width
+        self.height = texture.height
         self.center_x = x
         self.center_y = y
         self.change_x = 0
         self.change_y = 0
-        self.lives = 3
 
-
-class Ghost(arcade.Sprite):
-    def __init__(self, x, y):
-        super().__init__()
-        self.texture = arcade.make_circle_texture(
-            TILE // 2, arcade.color.RED
-        )
-        self.center_x = x
-        self.center_y = y
-        self.timer = 0
-
-
-class PacmanGame(arcade.Window):
+# --- Game View ---
+class PacmanGame(arcade.View):
     def __init__(self):
-        super().__init__(WIDTH, HEIGHT, "Pacman")
-
-        self.wall_list = arcade.SpriteList(use_spatial_hash=True)
-        self.coin_list = arcade.SpriteList(use_spatial_hash=True)
-        self.player_list = arcade.SpriteList()
+        super().__init__()
+        self.wall_list = arcade.SpriteList()
+        self.coin_list = arcade.SpriteList()
         self.ghost_list = arcade.SpriteList()
-
+        self.player_list = arcade.SpriteList()
         self.player = None
-        self.start_pos = (0, 0)
-
-        self.rows = len(LEVEL)
-        self.cols = len(LEVEL[0])
-        self.grid = []
-
-        self.lives_text = arcade.Text(
-            "Lives: 3", 10, HEIGHT - 30, arcade.color.WHITE, 16
-        )
-
-        self.setup()
+        self.score = 0
+        self.lives = 3
+        self.game_over = False
+        self.background_color = arcade.color.BLACK
 
     def setup(self):
-        for r, row in enumerate(LEVEL):
-            grid_row = []
-            for c, cell in enumerate(row):
-                x = c * TILE + TILE // 2
-                y = (self.rows - r - 1) * TILE + TILE // 2
+        self.wall_list = arcade.SpriteList()
+        self.coin_list = arcade.SpriteList()
+        self.ghost_list = arcade.SpriteList()
+        self.player_list = arcade.SpriteList()
+        self.game_over = False
+        self.score = 0
+        self.lives = 3
 
-                walkable = cell != "#"
-                grid_row.append(walkable)
+        rows = len(LEVEL_MAP)
+        for row_idx, row in enumerate(LEVEL_MAP):
+            for col_idx, cell in enumerate(row):
+                x = col_idx * TILE_SIZE + TILE_SIZE / 2
+                y = (rows - row_idx - 1) * TILE_SIZE + TILE_SIZE / 2
 
-                if cell == "#":
-                    self.wall_list.append(Wall(x, y))
+                if cell == "W":
+                    wall = arcade.Sprite()
+                    wall.texture = arcade.make_soft_square_texture(
+                        32, arcade.color.BLUE, outer_alpha=255
+                    )
+                    wall.center_x = x
+                    wall.center_y = y
+                    self.wall_list.append(wall)
+
                 elif cell == ".":
-                    self.coin_list.append(Coin(x, y))
-                elif cell == "P":
-                    self.player = Player(x, y)
-                    self.start_pos = (x, y)
-                    self.player_list.append(self.player)
-                elif cell == "G":
-                    self.ghost_list.append(Ghost(x, y))
+                    coin = arcade.Sprite()
+                    coin.texture = arcade.make_circle_texture(TILE_SIZE // 4, arcade.color.YELLOW)
+                    coin.center_x = x
+                    coin.center_y = y
+                    self.coin_list.append(coin)
 
-            self.grid.append(grid_row)
+                elif cell == "G":
+                    ghost = Character(x, y, arcade.color.RED, radius=TILE_SIZE//2)
+                    self.ghost_list.append(ghost)
+
+                elif cell == "P":
+                    self.player = Character(x, y, arcade.color.YELLOW, radius=28//2)
+                    self.player_list.append(self.player)
 
     def on_draw(self):
         self.clear()
@@ -112,9 +87,13 @@ class PacmanGame(arcade.Window):
         self.coin_list.draw()
         self.ghost_list.draw()
         self.player_list.draw()
-        self.lives_text.draw()
+        arcade.draw_text(f"SCORE: {self.score}", 10, WINDOW_HEIGHT - 30, arcade.color.WHITE, 24)
+        arcade.draw_text(f"LIVES: {self.lives}", 10, WINDOW_HEIGHT - 55, arcade.color.WHITE, 24)
 
-    # ✅ KEYBOARD WORKS HERE — NO VIEW MAGIC
+        if self.game_over:
+            arcade.draw_text("GAME OVER", WINDOW_WIDTH//2, WINDOW_HEIGHT//2,
+                             arcade.color.RED, 50, anchor_x="center")
+
     def on_key_press(self, key, modifiers):
         if key == arcade.key.UP:
             self.player.change_y = PLAYER_SPEED
@@ -131,21 +110,51 @@ class PacmanGame(arcade.Window):
         if key in (arcade.key.LEFT, arcade.key.RIGHT):
             self.player.change_x = 0
 
-    def on_update(self, dt):
-        self.player.center_x += self.player.change_x * dt
+    def on_update(self, delta_time):
+        if self.game_over:
+            return
+
+        # Move player
+        self.player.center_x += self.player.change_x * delta_time
+        self.player.center_y += self.player.change_y * delta_time
+
+        # Wall collisions
         if arcade.check_for_collision_with_list(self.player, self.wall_list):
-            self.player.center_x -= self.player.change_x * dt
+            self.player.center_x -= self.player.change_x * delta_time
+            self.player.center_y -= self.player.change_y * delta_time
 
-        self.player.center_y += self.player.change_y * dt
-        if arcade.check_for_collision_with_list(self.player, self.wall_list):
-            self.player.center_y -= self.player.change_y * dt
+        # Coin collection
+        coins_hit = arcade.check_for_collision_with_list(self.player, self.coin_list)
+        for coin in coins_hit:
+            coin.remove_from_sprite_lists()
+            self.score += 10  # Update score
 
-        self.lives_text.text = f"Lives: {self.player.lives}"
+        # Ghost collision
+        ghosts_hit = arcade.check_for_collision_with_list(self.player, self.ghost_list)
+        if ghosts_hit:
+            self.lives -= 1
+            # Reset player to start
+            for row_idx, row in enumerate(LEVEL_MAP):
+                for col_idx, cell in enumerate(row):
+                    if cell == "P":
+                        x = col_idx * TILE_SIZE + TILE_SIZE / 2
+                        y = (len(LEVEL_MAP) - row_idx - 1) * TILE_SIZE + TILE_SIZE / 2
+                        self.player.center_x = x
+                        self.player.center_y = y
+                        self.player.change_x = 0
+                        self.player.change_y = 0
+                        break
 
+            if self.lives <= 0:
+                self.game_over = True
 
 def main():
-    PacmanGame()
+    window = arcade.Window(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE)
+    game = PacmanGame()
+    game.setup()
+    window.show_view(game)
     arcade.run()
 
+if __name__ == "__main__":
+    main()
 
-main()
