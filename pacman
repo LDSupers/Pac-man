@@ -1,11 +1,15 @@
 import arcade
+import random
 
+# --- Constants ---
 WINDOW_WIDTH = 800
 WINDOW_HEIGHT = 600
 WINDOW_TITLE = "Pacman Game"
 TILE_SIZE = 32
-PLAYER_SPEED = 200
+PLAYER_SPEED = 150  # pixels per second
+GHOST_SPEED = 120
 
+# --- Level Map ---
 LEVEL_MAP = [
     "WWWWWWWWWWWWWWWWWWWWWWW",
     "W.........W.........W.W",
@@ -22,19 +26,21 @@ LEVEL_MAP = [
     "WWWWWWWWWWWWWWWWWWWWWWW"
 ]
 
+# --- Character Class ---
 class Character(arcade.Sprite):
     def __init__(self, x, y, color, radius=None):
         super().__init__()
         if radius is None:
             radius = TILE_SIZE // 2 - 2
-        texture = arcade.make_circle_texture(radius * 2, color)
-        self.texture = texture
-        self.width = texture.width
-        self.height = texture.height
+        self.texture = arcade.make_circle_texture(radius*2, color)
+        self.width = radius*2
+        self.height = radius*2
         self.center_x = x
         self.center_y = y
         self.change_x = 0
         self.change_y = 0
+        # For grid movement
+        self.next_direction = (0, 0)
 
 # --- Game View ---
 class PacmanGame(arcade.View):
@@ -68,13 +74,13 @@ class PacmanGame(arcade.View):
                 if cell == "W":
                     wall = arcade.Sprite()
                     wall.texture = arcade.make_soft_square_texture(
-                        32, arcade.color.BLUE, outer_alpha=255
+                        TILE_SIZE, arcade.color.BLUE, outer_alpha=255
                     )
                     wall.center_x = x
                     wall.center_y = y
                     self.wall_list.append(wall)
 
-                elif cell == ".":
+                elif cell == "." or cell == " ":
                     coin = arcade.Sprite()
                     coin.texture = arcade.make_circle_texture(TILE_SIZE // 4, arcade.color.YELLOW)
                     coin.center_x = x
@@ -83,65 +89,126 @@ class PacmanGame(arcade.View):
 
                 elif cell == "G":
                     ghost = Character(x, y, arcade.color.RED, radius=TILE_SIZE//2)
+                    ghost.target = (0, 0)
                     self.ghost_list.append(ghost)
 
                 elif cell == "P":
-                    self.player = Character(x, y, arcade.color.YELLOW, radius=28//2)
+                    self.player = Character(x, y, arcade.color.YELLOW, radius=28 // 2)
                     self.player_list.append(self.player)
 
+    # --- Drawing ---
     def on_draw(self):
         self.clear()
         self.wall_list.draw()
         self.coin_list.draw()
         self.ghost_list.draw()
         self.player_list.draw()
+
         arcade.draw_text(f"SCORE: {self.score}", 10, WINDOW_HEIGHT - 30, arcade.color.WHITE, 24)
         arcade.draw_text(f"LIVES: {self.lives}", 10, WINDOW_HEIGHT - 55, arcade.color.WHITE, 24)
 
         if self.game_over:
             arcade.draw_text("GAME OVER", WINDOW_WIDTH//2, WINDOW_HEIGHT//2,
-                             arcade.color.RED, 50, anchor_x="center")
+                             arcade.color.RED, 50, anchor_x="center", anchor_y="center")
 
+    # --- Player Input ---
     def on_key_press(self, key, modifiers):
         if key == arcade.key.UP:
-            self.player.change_y = PLAYER_SPEED
+            self.player.next_direction = (0, 1)
         elif key == arcade.key.DOWN:
-            self.player.change_y = -PLAYER_SPEED
+            self.player.next_direction = (0, -1)
         elif key == arcade.key.LEFT:
-            self.player.change_x = -PLAYER_SPEED
+            self.player.next_direction = (-1, 0)
         elif key == arcade.key.RIGHT:
-            self.player.change_x = PLAYER_SPEED
+            self.player.next_direction = (1, 0)
 
-    def on_key_release(self, key, modifiers):
-        if key in (arcade.key.UP, arcade.key.DOWN):
-            self.player.change_y = 0
-        if key in (arcade.key.LEFT, arcade.key.RIGHT):
+    # --- Movement Helpers ---
+    def move_player(self, delta_time):
+        if self.player is None:
+            return
+
+        # Snap to grid center for smooth turns
+        grid_x = round(self.player.center_x / TILE_SIZE) * TILE_SIZE
+        grid_y = round(self.player.center_y / TILE_SIZE) * TILE_SIZE
+
+        # Try to turn if next_direction is set
+        if self.player.next_direction != (0, 0):
+            dx, dy = self.player.next_direction
+            future_x = self.player.center_x + dx * PLAYER_SPEED * delta_time
+            future_y = self.player.center_y + dy * PLAYER_SPEED * delta_time
+            self.player.change_x = dx * PLAYER_SPEED
+            self.player.change_y = dy * PLAYER_SPEED
+            # Check wall collision
+            self.player.center_x = future_x
+            self.player.center_y = future_y
+            if arcade.check_for_collision_with_list(self.player, self.wall_list):
+                self.player.change_x = 0
+                self.player.change_y = 0
+                self.player.center_x = grid_x
+                self.player.center_y = grid_y
+            self.player.next_direction = (0, 0)
+
+        # Move in current direction
+        self.player.center_x += self.player.change_x * delta_time
+        self.player.center_y += self.player.change_y * delta_time
+        if arcade.check_for_collision_with_list(self.player, self.wall_list):
+            # Stop movement and snap to grid
+            self.player.center_x -= self.player.change_x * delta_time
+            self.player.center_y -= self.player.change_y * delta_time
             self.player.change_x = 0
+            self.player.change_y = 0
+            self.player.center_x = grid_x
+            self.player.center_y = grid_y
 
+    # --- Ghost AI ---
+    def move_ghosts(self, delta_time):
+        for ghost in self.ghost_list:
+            # Target the player
+            dx = self.player.center_x - ghost.center_x
+            dy = self.player.center_y - ghost.center_y
+
+            # Decide movement
+            if abs(dx) > abs(dy):
+                ghost.change_x = GHOST_SPEED if dx > 0 else -GHOST_SPEED
+                ghost.change_y = 0
+            else:
+                ghost.change_x = 0
+                ghost.change_y = GHOST_SPEED if dy > 0 else -GHOST_SPEED
+
+            # Move
+            ghost.center_x += ghost.change_x * delta_time
+            ghost.center_y += ghost.change_y * delta_time
+
+            # Wall collision
+            if arcade.check_for_collision_with_list(ghost, self.wall_list):
+                ghost.center_x -= ghost.change_x * delta_time
+                ghost.center_y -= ghost.change_y * delta_time
+                # Random turn
+                ghost.change_x, ghost.change_y = random.choice([
+                    (GHOST_SPEED, 0), (-GHOST_SPEED, 0),
+                    (0, GHOST_SPEED), (0, -GHOST_SPEED)
+                ])
+
+    # --- Update ---
     def on_update(self, delta_time):
         if self.game_over:
             return
 
-        # Move player
-        self.player.center_x += self.player.change_x * delta_time
-        self.player.center_y += self.player.change_y * delta_time
-
-        # Wall collisions
-        if arcade.check_for_collision_with_list(self.player, self.wall_list):
-            self.player.center_x -= self.player.change_x * delta_time
-            self.player.center_y -= self.player.change_y * delta_time
+        self.move_player(delta_time)
+        self.move_ghosts(delta_time)
 
         # Coin collection
         coins_hit = arcade.check_for_collision_with_list(self.player, self.coin_list)
         for coin in coins_hit:
             coin.remove_from_sprite_lists()
-            self.score += 10  # Update score
+            self.score += 10
 
         # Ghost collision
         ghosts_hit = arcade.check_for_collision_with_list(self.player, self.ghost_list)
         if ghosts_hit:
             self.lives -= 1
-            # Reset player to start
+            # Reset player
+            found = False
             for row_idx, row in enumerate(LEVEL_MAP):
                 for col_idx, cell in enumerate(row):
                     if cell == "P":
@@ -151,11 +218,20 @@ class PacmanGame(arcade.View):
                         self.player.center_y = y
                         self.player.change_x = 0
                         self.player.change_y = 0
+                        self.player.next_direction = (0, 0)
+                        found = True
                         break
-
+                if found:
+                    break
             if self.lives <= 0:
                 self.game_over = True
+                self.player.change_x = 0
+                self.player.change_y = 0
+                for ghost in self.ghost_list:
+                    ghost.change_x = 0
+                    ghost.change_y = 0
 
+# --- Main ---
 def main():
     window = arcade.Window(WINDOW_WIDTH, WINDOW_HEIGHT, WINDOW_TITLE)
     game = PacmanGame()
@@ -165,5 +241,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-
-
