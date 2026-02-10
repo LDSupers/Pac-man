@@ -1,0 +1,28 @@
+# --- Window ---
+WINDOW_WIDTH=800
+WINDOW_HEIGHT=600
+WINDOW_TITLE=Pacman Game
+
+# --- Tiles ---
+TILE_SIZE=32
+
+# --- Player ---
+PLAYER_SPEED=150
+PLAYER_COLOR=yellow
+PLAYER_RADIUS=14
+
+# --- Ghost ---
+GHOST_SPEED=120
+GHOST_COLOR=red
+GHOST_RADIUS=16
+
+# --- Coin ---
+COIN_COLOR=yellow
+COIN_SIZE=8
+
+# --- Background ---
+BACKGROUND_COLOR=black
+
+# --- Gameplay ---
+POINTS_PER_COIN=10
+PLAYER_LIVES=3
