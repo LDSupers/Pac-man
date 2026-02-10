@@ -1,13 +1,48 @@
 import arcade
 import random
 
-# --- Constants ---
-WINDOW_WIDTH = 800
-WINDOW_HEIGHT = 600
-WINDOW_TITLE = "Pacman Game"
-TILE_SIZE = 32
-PLAYER_SPEED = 150
-GHOST_SPEED = 120
+# --- Load config ---
+def load_config(filename):
+    config = {}
+    with open(filename, "r") as f:
+        for line in f:
+            line = line.strip()
+            if not line or line.startswith("#"):
+                continue
+            key, value = line.split("=")
+            key = key.strip()
+            value = value.strip()
+
+            # Convert numeric values
+            if value.isdigit():
+                value = int(value)
+            elif value.replace(".", "", 1).isdigit():
+                value = float(value)
+            config[key] = value
+    return config
+
+config = load_config("config.txt")
+
+# --- Global variables from config ---
+WINDOW_WIDTH = config.get("WINDOW_WIDTH", 800)
+WINDOW_HEIGHT = config.get("WINDOW_HEIGHT", 600)
+WINDOW_TITLE = config.get("WINDOW_TITLE", "Pacman Game")
+TILE_SIZE = config.get("TILE_SIZE", 32)
+
+PLAYER_SPEED = config.get("PLAYER_SPEED", 150)
+PLAYER_COLOR = getattr(arcade.color, config.get("PLAYER_COLOR", "YELLOW").upper())
+PLAYER_RADIUS = config.get("PLAYER_RADIUS", TILE_SIZE // 2 - 2)
+
+GHOST_SPEED = config.get("GHOST_SPEED", 120)
+GHOST_COLOR = getattr(arcade.color, config.get("GHOST_COLOR", "RED").upper())
+GHOST_RADIUS = config.get("GHOST_RADIUS", TILE_SIZE // 2 - 2)
+
+COIN_COLOR = getattr(arcade.color, config.get("COIN_COLOR", "YELLOW").upper())
+COIN_SIZE = config.get("COIN_SIZE", 8)
+
+BACKGROUND_COLOR = getattr(arcade.color, config.get("BACKGROUND_COLOR", "BLACK").upper())
+POINTS_PER_COIN = config.get("POINTS_PER_COIN", 10)
+PLAYER_LIVES = config.get("PLAYER_LIVES", 3)
 
 # --- Level Map ---
 LEVEL_MAP = [
@@ -52,9 +87,9 @@ class PacmanGame(arcade.View):
         self.player_list = arcade.SpriteList()
         self.player = None
         self.score = 0
-        self.lives = 3
+        self.lives = PLAYER_LIVES
         self.game_over = False
-        self.background_color = arcade.color.BLACK
+        self.background_color = BACKGROUND_COLOR
 
         # Text objects לשיפור ביצועים
         self.score_text = arcade.Text("", 10, WINDOW_HEIGHT - 30, arcade.color.WHITE, 24)
@@ -75,7 +110,7 @@ class PacmanGame(arcade.View):
         self.player_list = arcade.SpriteList()
         self.game_over = False
         self.score = 0
-        self.lives = 3
+        self.lives = PLAYER_LIVES
 
         rows = len(LEVEL_MAP)
         for row_idx, row in enumerate(LEVEL_MAP):
@@ -89,15 +124,15 @@ class PacmanGame(arcade.View):
                     wall.center_y = y
                     self.wall_list.append(wall)
                 elif cell == "." or cell == " ":
-                    coin = arcade.SpriteSolidColor(TILE_SIZE // 4, TILE_SIZE // 4, arcade.color.YELLOW)
+                    coin = arcade.SpriteSolidColor(COIN_SIZE, COIN_SIZE, COIN_COLOR)
                     coin.center_x = x
                     coin.center_y = y
                     self.coin_list.append(coin)
                 elif cell == "P":
-                    self.player = Character(x, y, arcade.color.YELLOW, radius=28 // 2)
+                    self.player = Character(x, y, PLAYER_COLOR, radius=PLAYER_RADIUS)
                     self.player_list.append(self.player)
                 elif cell == "G":
-                    ghost = Character(x, y, arcade.color.RED, radius=TILE_SIZE // 2)
+                    ghost = Character(x, y, GHOST_COLOR, radius=GHOST_RADIUS)
                     self.ghost_list.append(ghost)
 
     # --- Draw ---
@@ -129,7 +164,6 @@ class PacmanGame(arcade.View):
             self.player.next_direction = (1, 0)
 
     def on_key_release(self, key, modifiers):
-        # אפשרות לעצירה חלקית אם רוצים
         pass
 
     # --- Movement ---
@@ -202,7 +236,7 @@ class PacmanGame(arcade.View):
         coins_hit = arcade.check_for_collision_with_list(self.player, self.coin_list)
         for coin in coins_hit:
             coin.remove_from_sprite_lists()
-            self.score += 10
+            self.score += POINTS_PER_COIN
 
         # התנגשות עם רוחות
         ghosts_hit = arcade.check_for_collision_with_list(self.player, self.ghost_list)
